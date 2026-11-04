@@ -9,6 +9,7 @@ import { rateLimiter } from 'hono-rate-limiter'
 
 import { app as v1, mountDocs } from './openapi'
 import { env } from './env'
+import { getObject } from './lib/storage'
 
 const root = new Hono()
 
@@ -21,6 +22,34 @@ root.use(requestId())
 root.use(logger())
 root.use('*', prettyJSON())
 root.use('*', compress())
+
+// Public read-only proxy for media stored in private Cloudflare R2 bucket
+root.get('/v1/storage/public/:folder/:filename', async (c) => {
+  const folder = c.req.param('folder')
+  const filename = c.req.param('filename')
+  if (!/^\d{6}$/.test(folder) || !/^[a-zA-Z0-9._-]+$/.test(filename)) {
+    return c.json({ error: 'invalid file key' }, 400)
+  }
+  const key = `${folder}/${filename}`
+  try {
+    const obj = await getObject(key)
+    if (!obj.Body) return c.json({ error: 'file not found' }, 404)
+    const bytes = await obj.Body.transformToByteArray()
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        'Content-Type': obj.ContentType || 'image/webp',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+        'Access-Control-Allow-Origin': '*',
+        ...(obj.ETag ? { ETag: obj.ETag } : {}),
+      },
+    })
+  } catch {
+    return c.json({ error: 'file not found' }, 404)
+  }
+})
+
 root.use(
   '/v1/*',
   cors({
@@ -34,7 +63,7 @@ root.use(
     maxAge: 600,
   }),
 )
-root.use(secureHeaders())
+root.use(secureHeaders({ crossOriginResourcePolicy: 'cross-origin' }))
 root.use(
   '/v1/*',
   rateLimiter({
@@ -63,9 +92,3 @@ export default {
   fetch: root.fetch,
   reusePort: true,
 }
-
-const displayPort = Number(process.env.PORT_DISPLAY ?? env.PORT)
-console.log(`\n  API:       http://localhost:${displayPort}/v1`)
-console.log(`  Health:    http://localhost:${displayPort}/v1/health`)
-console.log(`  Swagger:   http://localhost:${displayPort}/swagger`)
-console.log(`  OpenAPI:   http://localhost:${displayPort}/doc\n`)
