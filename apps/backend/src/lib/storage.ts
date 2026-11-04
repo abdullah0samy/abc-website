@@ -1,8 +1,8 @@
-import { PutObjectCommand, DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { PutObjectCommand, DeleteObjectCommand, GetObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { env } from '../env'
 
 export const s3 = new S3Client({
-  region: 'us-east-1',
+  region: 'auto',
   endpoint: env.RUSTFS_ENDPOINT,
   forcePathStyle: true,
   credentials: {
@@ -14,7 +14,17 @@ export const s3 = new S3Client({
 const bucket = env.RUSTFS_BUCKET
 
 export function publicUrl(key: string): string {
-  return `${env.RUSTFS_PUBLIC_URL}/${key}`
+  const base = env.RUSTFS_PUBLIC_URL.replace(/\/$/, '')
+  return `${base}/${key}`
+}
+
+export async function getObject(key: string) {
+  return s3.send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+  )
 }
 
 export async function putObject(key: string, body: Buffer | Uint8Array, contentType: string): Promise<void> {
