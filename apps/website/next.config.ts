@@ -6,10 +6,10 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.unsplash.com' },
-      // local RustFS/S3 media storage used by the dashboard uploads
       { protocol: 'http', hostname: 'localhost', port: '9000' },
-      // production RustFS media storage (dashboard image uploads)
       { protocol: 'https', hostname: 'abc-files.karem.live' },
+      { protocol: 'https', hostname: '**.r2.dev' },
+      { protocol: 'https', hostname: '**.abchospitaleg.com' },
     ],
   },
 }
